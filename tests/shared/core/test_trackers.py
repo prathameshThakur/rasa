@@ -349,7 +349,10 @@ def test_restart_event(default_domain: Domain):
     tracker.update(Restarted())
 
     assert len(tracker.events) == 5
-    assert tracker.followup_action is not None
+    assert tracker.followup_action == ACTION_SESSION_START_NAME
+
+    tracker.update(SessionStarted())
+
     assert tracker.followup_action == ACTION_LISTEN_NAME
     assert tracker.latest_message.text is None
     assert len(list(tracker.generate_all_prior_trackers())) == 1
@@ -360,7 +363,7 @@ def test_restart_event(default_domain: Domain):
     recovered.recreate_from_dialogue(dialogue)
 
     assert recovered.current_state() == tracker.current_state()
-    assert len(recovered.events) == 5
+    assert len(recovered.events) == 6
     assert recovered.latest_message.text is None
     assert len(list(recovered.generate_all_prior_trackers())) == 1
 
@@ -1208,7 +1211,10 @@ def test_set_form_validation_deprecation_warning(validate: bool):
         ),
         (
             # this conversation does not contain a session
-            [UserUttered("hi", {"name": "greet"}), ActionExecuted("utter_greet"),],
+            [
+                UserUttered("hi", {"name": "greet"}),
+                ActionExecuted("utter_greet"),
+            ],
             1,
         ),
     ],

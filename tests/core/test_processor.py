@@ -10,6 +10,7 @@ from aioresponses import aioresponses
 from typing import Optional, Text, List, Callable, Type, Any
 from unittest.mock import patch, Mock
 
+from rasa.core.policies.rule_policy import RulePolicy
 from rasa.core.actions.action import ActionUtterTemplate
 from tests.utilities import latest_request
 
@@ -30,7 +31,7 @@ from rasa.shared.core.events import (
     ActionExecutionRejected,
 )
 from rasa.core.interpreter import RasaNLUHttpInterpreter
-from rasa.shared.nlu.interpreter import NaturalLanguageInterpreter
+from rasa.shared.nlu.interpreter import NaturalLanguageInterpreter, RegexInterpreter
 from rasa.core.policies import SimplePolicyEnsemble
 from rasa.core.policies.ted_policy import TEDPolicy
 from rasa.core.processor import MessageProcessor
@@ -40,6 +41,7 @@ from rasa.shared.core.trackers import DialogueStateTracker
 from rasa.shared.nlu.constants import INTENT_NAME_KEY
 from rasa.utils.endpoints import EndpointConfig
 from rasa.shared.core.constants import (
+    ACTION_RESTART_NAME,
     DEFAULT_INTENTS,
     ACTION_LISTEN_NAME,
     ACTION_SESSION_START_NAME,
@@ -866,3 +868,60 @@ async def test_handle_message_if_action_manually_rejects(
 
     assert ActionExecuted("utter_greet") not in logged_events
     assert all(event in logged_events for event in rejection_events)
+
+
+async def test_restart_session(
+    default_channel: CollectingOutputChannel,
+    default_processor: MessageProcessor,
+    monkeypatch: MonkeyPatch,
+):
+    # The rule policy is trained and used so as to allow the default action ActionRestart to be predicted
+    rule_policy = RulePolicy()
+    rule_policy.train([], default_processor.domain, RegexInterpreter())
+    default_processor.policy_ensemble.policies.insert(0, rule_policy)
+
+    sender_id = uuid.uuid4().hex
+
+    entity = "name"
+    slot_1 = {entity: "name1"}
+    await default_processor.handle_message(
+        UserMessage(f"/greet{json.dumps(slot_1)}", default_channel, sender_id)
+    )
+
+    assert default_channel.latest_output() == {
+        "recipient_id": sender_id,
+        "text": "hey there name1!",
+    }
+
+    # This restarts the chat
+    await default_processor.handle_message(
+        UserMessage(f"/restart", default_channel, sender_id)
+    )
+
+    tracker = default_processor.tracker_store.get_or_create_tracker(sender_id)
+
+    expected = [
+        ActionExecuted(ACTION_SESSION_START_NAME),
+        SessionStarted(),
+        ActionExecuted(ACTION_LISTEN_NAME),
+        UserUttered(
+            f"/greet{json.dumps(slot_1)}",
+            {INTENT_NAME_KEY: "greet", "confidence": 1.0},
+            [{"entity": entity, "start": 6, "end": 23, "value": "name1"}],
+        ),
+        SlotSet(entity, slot_1[entity]),
+        ActionExecuted("utter_greet"),
+        BotUttered("hey there name1!", metadata={"template_name": "utter_greet"}),
+        ActionExecuted(ACTION_LISTEN_NAME),
+        UserUttered(
+            "/restart",
+            {INTENT_NAME_KEY: "restart", "confidence": 1.0},
+        ),
+        ActionExecuted(ACTION_RESTART_NAME),
+        Restarted(),
+        ActionExecuted(ACTION_SESSION_START_NAME),
+        SessionStarted(),
+        # No previous slot is set due to restart.
+        ActionExecuted(ACTION_LISTEN_NAME),
+    ]
+    assert list(tracker.events) == expected

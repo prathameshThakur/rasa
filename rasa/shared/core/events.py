@@ -693,7 +693,7 @@ class Restarted(Event):
 
     def apply_to(self, tracker: "DialogueStateTracker") -> None:
         tracker._reset()
-        tracker.trigger_followup_action(ACTION_LISTEN_NAME)
+        tracker.trigger_followup_action(ACTION_SESSION_START_NAME)
 
 
 # noinspection PyProtectedMember
