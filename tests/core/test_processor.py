@@ -1079,10 +1079,7 @@ async def test_restart_session(
         ActionExecuted("utter_greet"),
         BotUttered("hey there name1!", metadata={"template_name": "utter_greet"}),
         ActionExecuted(ACTION_LISTEN_NAME),
-        UserUttered(
-            "/restart",
-            {INTENT_NAME_KEY: "restart", "confidence": 1.0},
-        ),
+        UserUttered("/restart", {INTENT_NAME_KEY: "restart", "confidence": 1.0},),
         ActionExecuted(ACTION_RESTART_NAME),
         Restarted(),
         ActionExecuted(ACTION_SESSION_START_NAME),
