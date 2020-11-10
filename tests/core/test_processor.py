@@ -895,7 +895,7 @@ async def test_restart_session(
 
     # This restarts the chat
     await default_processor.handle_message(
-        UserMessage(f"/restart", default_channel, sender_id)
+        UserMessage("/restart", default_channel, sender_id)
     )
 
     tracker = default_processor.tracker_store.get_or_create_tracker(sender_id)
